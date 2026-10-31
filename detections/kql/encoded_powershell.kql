@@ -1,0 +1,13 @@
+// Encoded PowerShell execution
+// MITRE ATT&CK: T1059.001 PowerShell, T1027 Obfuscated Files or Information
+// Logic: PowerShell launched with an encoded command, decoded so the analyst sees the payload.
+// Known false positives: some management agents and installers use -EncodedCommand.
+// Tuning: exclude by signed parent process and known decoded content, never by process name alone.
+DeviceProcessEvents
+| where Timestamp > ago(1d)
+| where FileName in~ ("powershell.exe", "pwsh.exe")
+| where ProcessCommandLine matches regex @"(?i)\s-(e|en|enc|enco|encod|encode|encoded|encodedc|encodedcommand)\s+[A-Za-z0-9+/=]{20,}"
+| extend Encoded = extract(@"(?i)\s-e\w*\s+([A-Za-z0-9+/=]{20,})", 1, ProcessCommandLine)
+| extend Decoded = replace_string(base64_decode_tostring(Encoded), "\0", "")
+| project Timestamp, DeviceName, AccountName, InitiatingProcessFileName, InitiatingProcessCommandLine, ProcessCommandLine, Decoded
+| order by Timestamp desc

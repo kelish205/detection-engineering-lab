@@ -1,0 +1,16 @@
+// New inbox rule forwarding mail to an external address
+// MITRE ATT&CK: T1114.003 Email Forwarding Rule
+// Logic: a mailbox rule that forwards or redirects mail outside the tenant, a common step after account takeover.
+// Known false positives: users forwarding to personal mail, sanctioned business forwarding.
+// Tuning: add your accepted domains to internal_domains and review allowed forwarding with the business.
+let internal_domains = dynamic(["contoso.com"]);
+OfficeActivity
+| where TimeGenerated > ago(1d)
+| where Operation in ("New-InboxRule", "Set-InboxRule", "UpdateInboxRules")
+| mv-expand Param = todynamic(Parameters)
+| where tostring(Param.Name) in ("ForwardTo", "ForwardAsAttachmentTo", "RedirectTo")
+| extend Target = tostring(Param.Value)
+| extend TargetDomain = tolower(tostring(split(Target, "@")[1]))
+| where isnotempty(TargetDomain) and not(TargetDomain in (internal_domains))
+| project TimeGenerated, UserId, ClientIP, Operation, Target, TargetDomain
+| order by TimeGenerated desc

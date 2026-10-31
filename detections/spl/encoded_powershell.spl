@@ -1,0 +1,9 @@
+``` Encoded PowerShell execution
+    MITRE ATT&CK: T1059.001 PowerShell
+    Logic: PowerShell process creation with an encoded command, from Sysmon Event ID 1.
+    Known false positives: management agents and installers that use -EncodedCommand.
+    Tuning: exclude by signed parent and known decoded content. ```
+index=sysmon EventCode=1 (Image="*\\powershell.exe" OR Image="*\\pwsh.exe")
+| regex CommandLine="(?i)\s-e(n|nc|nco|ncod|ncode|ncoded|ncodedcommand)?\s+[A-Za-z0-9+/=]{20,}"
+| table _time host User ParentImage ParentCommandLine CommandLine
+| sort - _time

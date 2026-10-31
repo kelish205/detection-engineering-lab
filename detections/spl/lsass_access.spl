@@ -1,0 +1,10 @@
+``` LSASS memory access by an unusual process
+    MITRE ATT&CK: T1003.001 OS Credential Dumping: LSASS Memory
+    Logic: Sysmon Event ID 10 process access to lsass.exe from a process outside the allowlist.
+    Known false positives: EDR, AV and backup agents.
+    Tuning: build the allowlist from your baseline and match on full path. ```
+index=sysmon EventCode=10 TargetImage="*\\lsass.exe"
+| search NOT SourceImage IN ("*\\MsMpEng.exe", "*\\csrss.exe", "*\\wininit.exe", "*\\svchost.exe", "*\\WerFault.exe")
+| stats count min(_time) as first_seen values(GrantedAccess) as access by host SourceImage SourceUser
+| convert ctime(first_seen)
+| sort - count

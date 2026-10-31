@@ -1,0 +1,13 @@
+// LSASS memory access by an unusual process
+// MITRE ATT&CK: T1003.001 OS Credential Dumping: LSASS Memory
+// Logic: a process opening lsass.exe that is not a known security or system tool.
+// Known false positives: EDR, AV and backup agents, Windows Error Reporting.
+// Tuning: build the allowlist from your own baseline and prefer signer plus path over file name.
+let allowed = dynamic(["MsMpEng.exe", "csrss.exe", "wininit.exe", "svchost.exe", "WerFault.exe", "lsm.exe", "CSFalconService.exe"]);
+DeviceEvents
+| where Timestamp > ago(1d)
+| where ActionType == "OpenProcessApiCall"
+| where FileName =~ "lsass.exe"
+| where not(InitiatingProcessFileName in~ (allowed))
+| project Timestamp, DeviceName, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessCommandLine, InitiatingProcessSHA256
+| order by Timestamp desc
