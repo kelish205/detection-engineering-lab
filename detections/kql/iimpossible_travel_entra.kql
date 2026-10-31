@@ -1,0 +1,42 @@
+// Impossible travel between Entra ID sign-ins
+// MITRE ATT&CK: T1078 Valid Accounts (T1078.004 Cloud Accounts)
+// Logic: two successful sign-ins for the same user from different countries, close enough in time that the implied travel speed is not physically possible.
+// Known false positives: VPN or proxy egress in another country, mobile carriers that geolocate to a distant hub, travelers on corporate VPN, inaccurate IP geolocation.
+// Tuning: exclude known VPN and proxy egress IPs with a watchlist, raise min_distance_km to skip neighboring countries, and consider excluding sign-ins from compliant or hybrid joined devices if your baseline shows they are mostly VPN noise.
+let lookback = 1d;
+let max_window = 4h;          // only compare sign-ins this close together
+let min_distance_km = 500;    // ignore short hops across a nearby border
+let max_speed_kmh = 900;      // roughly commercial airliner speed
+SigninLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType == "0"     // successful sign-ins only
+| extend
+    Country = tostring(LocationDetails.countryOrRegion),
+    City = tostring(LocationDetails.city),
+    Lat = todouble(LocationDetails.geoCoordinates.latitude),
+    Lon = todouble(LocationDetails.geoCoordinates.longitude)
+| where isnotempty(Country) and isnotnull(Lat) and isnotnull(Lon)
+| project TimeGenerated, UserPrincipalName, IPAddress, Country, City, Lat, Lon, AppDisplayName, UserAgent
+| sort by UserPrincipalName asc, TimeGenerated asc
+| extend
+    PrevUser = prev(UserPrincipalName),
+    PrevTime = prev(TimeGenerated),
+    PrevIP = prev(IPAddress),
+    PrevCountry = prev(Country),
+    PrevCity = prev(City),
+    PrevLat = prev(Lat),
+    PrevLon = prev(Lon),
+    PrevApp = prev(AppDisplayName)
+| where UserPrincipalName == PrevUser and Country != PrevCountry
+| where TimeGenerated - PrevTime <= max_window
+| extend
+    DistanceKm = round(geo_distance_2points(PrevLon, PrevLat, Lon, Lat) / 1000.0, 0),
+    HoursBetween = round(datetime_diff('second', TimeGenerated, PrevTime) / 3600.0, 2)
+| extend SpeedKmh = iff(HoursBetween > 0, round(DistanceKm / HoursBetween, 0), real(+inf))
+| where DistanceKm >= min_distance_km and SpeedKmh > max_speed_kmh
+| project
+    UserPrincipalName,
+    FirstSignIn = PrevTime, FirstIP = PrevIP, FirstLocation = strcat(PrevCity, ", ", PrevCountry), FirstApp = PrevApp,
+    SecondSignIn = TimeGenerated, SecondIP = IPAddress, SecondLocation = strcat(City, ", ", Country), SecondApp = AppDisplayName,
+    DistanceKm, HoursBetween, SpeedKmh, UserAgent
+| order by SpeedKmh desc
