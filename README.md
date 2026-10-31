@@ -12,6 +12,7 @@ None of this comes from client or employer environments. Thresholds are starting
 | Encoded PowerShell execution | T1059.001 | [kql](detections/kql/encoded_powershell.kql) | [spl](detections/spl/encoded_powershell.spl) |
 | New inbox rule forwarding mail externally | T1114.003 | [kql](detections/kql/inbox_forwarding_rule.kql) | |
 | LSASS memory access by an unusual process | T1003.001 | [kql](detections/kql/lsass_access.kql) | [spl](detections/spl/lsass_access.spl) |
+| Impossible travel between Entra ID sign-ins | T1078 | [kql](detections/kql/impossible_travel_entra.kql) | |
 
 ## How I write a detection
 
