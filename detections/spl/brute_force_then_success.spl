@@ -1,0 +1,26 @@
+``` Brute force followed by a successful logon
+    MITRE ATT&CK: T1110 Brute Force (T1110.001 Password Guessing)
+    Logic: one account with many failed logons (4625) and then a successful logon (4624) after the failures started, within an hour.
+    Known false positives: users who forget a password and then get it right, service accounts or mapped drives retrying a stale password before an update, password resets followed by a cached credential, vulnerability scanners with valid test accounts.
+    Tuning: run over 14 to 30 days to set the failure threshold (10 by default), exclude scanner sources and service accounts with a lookup, and raise severity when the success comes from a source IP that also produced failures or uses LogonType 10 (RDP). ```
+index=wineventlog (EventCode=4625 OR EventCode=4624) earliest=-1h
+| eval account=lower(TargetDomainName."\\".TargetUserName)
+| where NOT match(TargetUserName, "\$$") AND TargetUserName!="-" AND TargetUserName!="ANONYMOUS LOGON"
+| eval outcome=if(EventCode=4625, "failure", "success")
+| stats count(eval(outcome="failure")) as failures
+        count(eval(outcome="success")) as successes
+        min(eval(if(outcome="failure", _time, null()))) as first_failure
+        max(eval(if(outcome="failure", _time, null()))) as last_failure
+        max(eval(if(outcome="success", _time, null()))) as last_success
+        values(eval(if(outcome="failure", IpAddress, null()))) as failure_sources
+        values(eval(if(outcome="success", IpAddress, null()))) as success_sources
+        values(eval(if(outcome="success", LogonType, null()))) as success_logon_types
+        values(host) as hosts
+        by account
+| where failures >= 10 AND successes > 0 AND last_success > first_failure
+| eval success_from_failing_source=if(isnotnull(mvfind(failure_sources, "^".replace(mvindex(success_sources, 0), "\\.", "\\\\.")."$")), "yes", "no")
+| eval minutes_fail_to_success=round((last_success - first_failure) / 60, 1)
+| convert ctime(first_failure) ctime(last_failure) ctime(last_success)
+| table account failures successes first_failure last_failure last_success minutes_fail_to_success failure_sources success_sources success_from_failing_source success_logon_types hosts
+| sort - failures
+```
