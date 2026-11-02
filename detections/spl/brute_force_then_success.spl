@@ -1,4 +1,4 @@
-``` Brute force followed by a successful logon
+```Brute force followed by a successful logon
     MITRE ATT&CK: T1110 Brute Force (T1110.001 Password Guessing)
     Logic: one account with many failed logons (4625) and then a successful logon (4624) after the failures started, within an hour.
     Known false positives: users who forget a password and then get it right, service accounts or mapped drives retrying a stale password before an update, password resets followed by a cached credential, vulnerability scanners with valid test accounts.
@@ -23,4 +23,3 @@ index=wineventlog (EventCode=4625 OR EventCode=4624) earliest=-1h
 | convert ctime(first_failure) ctime(last_failure) ctime(last_success)
 | table account failures successes first_failure last_failure last_success minutes_fail_to_success failure_sources success_sources success_from_failing_source success_logon_types hosts
 | sort - failures
-```
